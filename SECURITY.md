@@ -9,8 +9,8 @@ A bug here can be a serious vulnerability, so please treat it accordingly.
 **Do not open a public issue or PR for a security problem.**
 
 Report privately via **GitHub → Security → Report a vulnerability** (a private security
-advisory on this repository), or email **security@mlgorithm.dev** *(placeholder — set
-your real security contact before publishing)*.
+advisory on this repository; enable "Private vulnerability reporting" in repo settings).
+If you can't use that, contact a maintainer listed in [`MAINTAINERS.md`](MAINTAINERS.md).
 
 Please include: affected version/commit, a description, and ideally a minimal
 reproduction or a failing conformance-style vector. We aim to acknowledge within

@@ -28,8 +28,8 @@ individual is representing the project in public spaces.
 
 ## Enforcement
 
-Report unacceptable behavior to **conduct@mlgorithm.dev** *(placeholder — set a real
-contact before publishing)*. Reports will be reviewed and handled confidentially.
+Report unacceptable behavior privately to a maintainer listed in
+[`MAINTAINERS.md`](MAINTAINERS.md). Reports will be reviewed and handled confidentially.
 Maintainers may remove, edit, or reject contributions and comments that violate this
 code, and may temporarily or permanently ban any contributor for behavior they deem
 inappropriate.
