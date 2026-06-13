@@ -1,0 +1,50 @@
+{
+  "description": "Records that MUST validate (valid:true) or MUST be rejected (valid:false) against schema/evidence-v1.schema.json. Any conformant emitter/validator must agree. See SPEC.md section 'Evidence record'.",
+  "cases": [
+    {
+      "name": "minimal valid record",
+      "valid": true,
+      "record": {"schema_version": "agent-assurance.evidence.v1", "ts": "2026-01-01T00:00:00.000Z", "type": "tool_call", "direction": "request", "decision": "allow"}
+    },
+    {
+      "name": "full valid record with tool, result, latency, context",
+      "valid": true,
+      "record": {"schema_version": "agent-assurance.evidence.v1", "ts": "2026-01-01T00:00:00.000Z", "session_id": "sess#0", "agent": "alice", "type": "tool_call", "direction": "request", "tool": {"name": "shell", "arguments": {"cmd": "pwd"}}, "result": {"is_error": false, "summary": "ok"}, "latency_ms": 12, "decision": "block", "reason": "shell is gated", "context": {"transport": "http", "rpc_id": 1, "method": "tools/call"}}
+    },
+    {
+      "name": "explicit nulls on optional fields are valid",
+      "valid": true,
+      "record": {"schema_version": "agent-assurance.evidence.v1", "ts": "2026-01-01T00:00:00.000Z", "session_id": null, "agent": null, "type": "response", "direction": "response", "tool": null, "result": null, "latency_ms": null, "decision": "observe", "reason": null, "context": null}
+    },
+    {
+      "name": "embedded actuator record (no transport context)",
+      "valid": true,
+      "record": {"schema_version": "agent-assurance.evidence.v1", "ts": "2026-01-01T00:00:00.000Z", "agent": "usv-planner", "type": "actuator_command", "direction": "request", "tool": {"name": "goto_waypoint", "arguments": {"x": 10, "y": 20}}, "decision": "require_approval", "reason": "outside geofence"}
+    },
+    {
+      "name": "unknown decision label is rejected",
+      "valid": false,
+      "record": {"schema_version": "agent-assurance.evidence.v1", "ts": "2026-01-01T00:00:00.000Z", "type": "tool_call", "direction": "request", "decision": "sneaky"}
+    },
+    {
+      "name": "missing required ts is rejected",
+      "valid": false,
+      "record": {"schema_version": "agent-assurance.evidence.v1", "type": "tool_call", "direction": "request", "decision": "allow"}
+    },
+    {
+      "name": "unknown top-level field is rejected (additionalProperties: false)",
+      "valid": false,
+      "record": {"schema_version": "agent-assurance.evidence.v1", "ts": "2026-01-01T00:00:00.000Z", "type": "tool_call", "direction": "request", "decision": "allow", "rpc_id": 7}
+    },
+    {
+      "name": "invalid direction is rejected",
+      "valid": false,
+      "record": {"schema_version": "agent-assurance.evidence.v1", "ts": "2026-01-01T00:00:00.000Z", "type": "tool_call", "direction": "sideways", "decision": "allow"}
+    },
+    {
+      "name": "wrong schema_version is rejected",
+      "valid": false,
+      "record": {"schema_version": "agent-assurance.evidence.v2", "ts": "2026-01-01T00:00:00.000Z", "type": "tool_call", "direction": "request", "decision": "allow"}
+    }
+  ]
+}

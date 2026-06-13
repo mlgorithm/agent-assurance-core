@@ -1,0 +1,25 @@
+{
+  "description": "Golden vectors for the audit hash-chain link function. Any conformant implementation MUST produce expected_hash. See SPEC.md section 'Audit chain'.",
+  "algorithm": "lowercase_hex( sha256( hex_decode(prev) || utf8(record_bytes) ) )",
+  "genesis_prev": "0000000000000000000000000000000000000000000000000000000000000000",
+  "vectors": [
+    {
+      "name": "genesis link (first entry)",
+      "prev": "0000000000000000000000000000000000000000000000000000000000000000",
+      "record_bytes": "{\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:00.000Z\",\"type\":\"tool_call\",\"direction\":\"request\",\"decision\":\"allow\"}",
+      "expected_hash": "ee3f0be0f329dfac80b6d360e5ba1f309f05169f952bf7791f924d494cd1d5f5"
+    },
+    {
+      "name": "second link (chained on first)",
+      "prev": "ee3f0be0f329dfac80b6d360e5ba1f309f05169f952bf7791f924d494cd1d5f5",
+      "record_bytes": "{\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:01.000Z\",\"type\":\"response\",\"direction\":\"response\",\"decision\":\"observe\"}",
+      "expected_hash": "4d5315163948d658354478200589ac7449edcc2cc700fe9428d648d7f1561486"
+    },
+    {
+      "name": "empty object body",
+      "prev": "0000000000000000000000000000000000000000000000000000000000000000",
+      "record_bytes": "{}",
+      "expected_hash": "fb1634c4e6cd4b1f1afe3ce2d6ef080f7ac5d1f357d723ad4dfca782733b62db"
+    }
+  ]
+}
