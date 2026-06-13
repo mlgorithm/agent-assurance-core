@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mlgorithm.dev/schema/agent-assurance.evidence.v1.json",
+  "title": "agent-assurance.evidence.v1",
+  "description": "Canonical evidence record emitted by the agent-assurance kernel and its distributions (the firewall runtime audit log and the crash-lab benchmark results). One shape across cloud software and embedded actuators; transport-specific fields go in `context`. This file is the source of truth for both the Rust and Python emitters.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "ts", "type", "direction", "decision"],
+  "properties": {
+    "schema_version": { "const": "agent-assurance.evidence.v1" },
+    "ts": { "type": "string", "description": "RFC3339 timestamp" },
+    "session_id": { "type": ["string", "null"] },
+    "agent": { "type": ["string", "null"] },
+    "type": { "type": "string", "description": "tool_call | notification | rpc | response | ..." },
+    "direction": { "type": "string", "enum": ["request", "response", "event"] },
+    "tool": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["name", "arguments"],
+      "properties": {
+        "name": { "type": "string" },
+        "arguments": {}
+      }
+    },
+    "result": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["is_error", "summary"],
+      "properties": {
+        "is_error": { "type": "boolean" },
+        "summary": { "type": "string" }
+      }
+    },
+    "latency_ms": { "type": ["integer", "null"], "minimum": 0 },
+    "decision": {
+      "type": "string",
+      "enum": [
+        "allow", "block", "would_block", "require_approval",
+        "would_require_approval", "approved", "denied", "timeout", "observe"
+      ]
+    },
+    "reason": { "type": ["string", "null"] },
+    "context": {
+      "type": ["object", "null"],
+      "description": "Distribution-specific fields (e.g. the MCP/HTTP proxy puts transport, rpc_id, method, client_addr, upstream here)."
+    }
+  }
+}

@@ -1,5 +1,6 @@
 use anyhow::{bail, Result};
-use serde_json::Value;
+
+use crate::schema::ProposedAction;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -54,5 +55,7 @@ pub enum Decision {
 /// proposed action; the implementation can be a local matcher, Cedar, a safety
 /// envelope, or another deterministic policy backend.
 pub trait Engine: Send + Sync {
-    fn decide(&self, agent: &str, tool: &str, args: &Value) -> Decision;
+    /// Decide on one normalized proposed action. Every adapter (MCP, HTTP, stdio,
+    /// embedded actuator) builds a `ProposedAction`, so the decision core sees one shape.
+    fn decide(&self, action: &ProposedAction) -> Decision;
 }

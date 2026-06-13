@@ -41,10 +41,6 @@ pub struct Record {
     pub r#type: String,
     pub direction: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub rpc_id: Option<serde_json::Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub method: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub tool: Option<ToolInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub result: Option<ResultInfo>,
@@ -53,11 +49,12 @@ pub struct Record {
     pub decision: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
-    pub transport: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub client_addr: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub upstream: Option<String>,
+    /// Distribution-specific context, kept out of the core fields so the same
+    /// record shape serves cloud software and embedded actuators alike. The
+    /// MCP/HTTP proxy puts `transport`, `rpc_id`, `method`, `client_addr`, and
+    /// `upstream` in here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<serde_json::Value>,
 }
 
 impl Record {
@@ -397,8 +394,6 @@ mod tests {
             agent: Some("agent-1".to_string()),
             r#type: "tool_call".to_string(),
             direction: "request".to_string(),
-            rpc_id: None,
-            method: Some("tools/call".to_string()),
             tool: Some(ToolInfo {
                 name: "shell".to_string(),
                 arguments: serde_json::json!({"cmd": "pwd"}),
@@ -407,9 +402,7 @@ mod tests {
             latency_ms: None,
             decision: "allow".to_string(),
             reason: None,
-            transport: "test".to_string(),
-            client_addr: None,
-            upstream: None,
+            context: Some(serde_json::json!({"transport": "test", "method": "tools/call"})),
         })
         .unwrap();
 
