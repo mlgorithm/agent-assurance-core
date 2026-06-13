@@ -6,5 +6,6 @@
 //! this crate.
 
 pub mod audit;
+pub mod ffi;
 pub mod policy;
 pub mod schema;

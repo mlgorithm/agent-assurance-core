@@ -34,6 +34,12 @@ cargo test                      # lib tests + conformance vectors
 cargo test --test conformance   # just the conformance suite
 ```
 
+## Bindings (C ABI / WASM)
+
+The same core is callable from C/C++, Python, embedded targets, and — via `wasm32` —
+JavaScript. The portable surface is evidence hashing + verification. See
+[`bindings/`](bindings/) (`cargo build && python3 bindings/ffi_ctypes.py`).
+
 ## Project
 
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`GOVERNANCE.md`](GOVERNANCE.md) ·

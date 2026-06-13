@@ -199,41 +199,39 @@ pub fn verify_entry(
     }
 }
 
-/// Recompute the chain from genesis and confirm every link.
+/// Recompute the chain from genesis and confirm every link, reading from a file.
 pub fn verify_file(path: &str, pubkey: Option<&VerifyingKey>) -> Result<VerifyReport> {
-    let f = File::open(path)?;
-    let reader = BufReader::new(f);
+    let text = std::fs::read_to_string(path)?;
+    Ok(verify_str(&text, pubkey))
+}
 
+/// Verify a hash-chained log from its JSONL text. Infallible: malformed input
+/// yields a report with `ok = false` and the first failing line. This is the
+/// portable verification entry point the C ABI / WASM bindings call.
+pub fn verify_str(jsonl: &str, pubkey: Option<&VerifyingKey>) -> VerifyReport {
     let mut prev = GENESIS.to_string();
     let mut expected_seq = 1u64;
     let mut count = 0u64;
 
-    for (idx, line) in reader.lines().enumerate() {
-        let line = line?;
+    for (idx, line) in jsonl.lines().enumerate() {
         if line.trim().is_empty() {
             continue;
         }
         let lineno = idx + 1;
 
-        let entry: Entry = match serde_json::from_str(&line) {
+        let entry: Entry = match serde_json::from_str(line) {
             Ok(e) => e,
-            Err(e) => return Ok(fail(count, format!("line {lineno}: parse error: {e}"))),
+            Err(e) => return fail(count, format!("line {lineno}: parse error: {e}")),
         };
 
         if entry.seq != expected_seq {
-            return Ok(fail(
+            return fail(
                 count,
-                format!(
-                    "line {lineno}: expected seq {expected_seq}, got {}",
-                    entry.seq
-                ),
-            ));
+                format!("line {lineno}: expected seq {expected_seq}, got {}", entry.seq),
+            );
         }
         if entry.prev != prev {
-            return Ok(fail(
-                count,
-                format!("line {lineno}: prev-hash mismatch (chain broken)"),
-            ));
+            return fail(count, format!("line {lineno}: prev-hash mismatch (chain broken)"));
         }
 
         let prev_bytes = hex::decode(&entry.prev).unwrap_or_else(|_| vec![0u8; 32]);
@@ -242,22 +240,19 @@ pub fn verify_file(path: &str, pubkey: Option<&VerifyingKey>) -> Result<VerifyRe
         hasher.update(entry.record.get().as_bytes());
         let computed = hex::encode(hasher.finalize());
         if computed != entry.hash {
-            return Ok(fail(
-                count,
-                format!("line {lineno}: hash mismatch (record tampered)"),
-            ));
+            return fail(count, format!("line {lineno}: hash mismatch (record tampered)"));
         }
 
         if let Some(pk) = pubkey {
             match verify_sig(pk, &entry) {
                 Ok(true) => {}
                 Ok(false) => {
-                    return Ok(fail(
+                    return fail(
                         count,
                         format!("line {lineno}: signature mismatch (forged or wrong key)"),
-                    ))
+                    )
                 }
-                Err(msg) => return Ok(fail(count, format!("line {lineno}: {msg}"))),
+                Err(msg) => return fail(count, format!("line {lineno}: {msg}")),
             }
         }
 
@@ -266,11 +261,11 @@ pub fn verify_file(path: &str, pubkey: Option<&VerifyingKey>) -> Result<VerifyRe
         count += 1;
     }
 
-    Ok(VerifyReport {
+    VerifyReport {
         entries: count,
         ok: true,
         error: None,
-    })
+    }
 }
 
 /// Generate a fresh Ed25519 signing key.
