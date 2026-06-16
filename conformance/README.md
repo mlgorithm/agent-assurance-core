@@ -8,9 +8,12 @@ run these against its own code to prove conformance.
 |---|---|
 | `hash-vectors.json` | the audit link-hash function: `sha256(hex_decode(prev) ‖ record_bytes)`. Every implementation MUST reproduce `expected_hash`. |
 | `evidence-records.json` | records that MUST validate (`valid:true`) or MUST be rejected (`valid:false`) against [`../schema/evidence-v1.schema.json`](../schema/evidence-v1.schema.json). |
+| `verify-vectors.json` | whole-log `verify` outcomes (SPEC.md §5–§5.1): a valid signed log; chain-only verification; and tampered, forged-signature, reordered, and truncated-against-an-anchored-head logs that MUST be rejected. |
 
-Signature conformance is governed by Ed25519 (RFC 8032) over the lowercase-hex `hash`
-string; use the RFC's own test vectors.
+`verify-vectors.json` is signed with a fixed, test-only key (embedded as `signing_key_hex`)
+so the bytes are reproducible; regenerate with `cargo run --example gen_verify_vectors`.
+Signature conformance is otherwise governed by Ed25519 (RFC 8032) over the lowercase-hex
+`hash` string; use the RFC's own test vectors.
 
 ## Running them
 

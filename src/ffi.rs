@@ -11,7 +11,9 @@ use std::ffi::{c_char, CStr, CString};
 use std::ptr;
 use std::slice;
 
-use crate::audit::{compute_hash, load_verifying_key_hex, verify_str};
+use crate::audit::{
+    compute_hash, load_verifying_key_hex, verify_str, verify_str_with_head, Head, VerifyReport,
+};
 
 const VERSION: &[u8] = b"agent-assurance.evidence.v1\0";
 
@@ -91,13 +93,67 @@ pub unsafe extern "C" fn aac_verify_log(
             None => return into_c_string(r#"{"ok":false,"entries":0,"error":"invalid pubkey"}"#),
         }
     };
-    let report = verify_str(text, pubkey.as_ref());
-    let json = serde_json::json!({
+    into_c_string(report_json(&verify_str(text, pubkey.as_ref())))
+}
+
+/// Like [`aac_verify_log`], but also assert the log reaches an out-of-band head
+/// `(expected_seq, expected_hash_hex)` — how a witness detects truncation. Pass
+/// `expected_hash_hex` = null to skip the head check (identical to
+/// [`aac_verify_log`]). Same JSON result shape (including `head_seq`/`head_hash`).
+///
+/// # Safety
+/// `jsonl`, and any non-null `pubkey_hex` / `expected_hash_hex`, must be valid
+/// NUL-terminated C strings.
+#[no_mangle]
+pub unsafe extern "C" fn aac_verify_log_expecting(
+    jsonl: *const c_char,
+    pubkey_hex: *const c_char,
+    expected_seq: u64,
+    expected_hash_hex: *const c_char,
+) -> *mut c_char {
+    if jsonl.is_null() {
+        return ptr::null_mut();
+    }
+    let text = match CStr::from_ptr(jsonl).to_str() {
+        Ok(s) => s,
+        Err(_) => return ptr::null_mut(),
+    };
+    let pubkey = if pubkey_hex.is_null() {
+        None
+    } else {
+        match CStr::from_ptr(pubkey_hex)
+            .to_str()
+            .ok()
+            .and_then(|h| load_verifying_key_hex(h).ok())
+        {
+            Some(k) => Some(k),
+            None => return into_c_string(r#"{"ok":false,"entries":0,"error":"invalid pubkey","head_seq":null,"head_hash":null}"#),
+        }
+    };
+    let expected = if expected_hash_hex.is_null() {
+        None
+    } else {
+        match CStr::from_ptr(expected_hash_hex).to_str() {
+            Ok(h) => Some(Head {
+                seq: expected_seq,
+                hash: h.to_string(),
+            }),
+            Err(_) => return ptr::null_mut(),
+        }
+    };
+    let report = verify_str_with_head(text, pubkey.as_ref(), expected.as_ref());
+    into_c_string(report_json(&report))
+}
+
+fn report_json(report: &VerifyReport) -> String {
+    serde_json::json!({
         "ok": report.ok,
         "entries": report.entries,
         "error": report.error,
-    });
-    into_c_string(json.to_string())
+        "head_seq": report.head.as_ref().map(|h| h.seq),
+        "head_hash": report.head.as_ref().map(|h| h.hash.clone()),
+    })
+    .to_string()
 }
 
 fn into_c_string(s: impl Into<Vec<u8>>) -> *mut c_char {

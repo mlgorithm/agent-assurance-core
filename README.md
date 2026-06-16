@@ -10,6 +10,7 @@ This crate contains the stable primitives that every distribution shares:
 - versioned evidence records
 - hash-chained audit entries
 - Ed25519 signing and verification
+- head-anchored verification — detect log **truncation** against a witnessed `head` (see [`SPEC.md`](SPEC.md) §5.1)
 
 Product-specific transports stay outside this crate. `agent-firewall` adapts MCP,
 HTTP, and stdio into this kernel. `agent-firewall-cloud` verifies the same audit

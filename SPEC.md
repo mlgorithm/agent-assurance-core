@@ -121,7 +121,40 @@ Records are appended to a log as **entries**. Each entry is one line:
 `record_bytes` and check it equals `hash`, and (when a public key is supplied) check
 `sig`. Any failure means the log is invalid; a verifier MUST report the first failing
 entry. A tampered `record`, a forged/absent signature, a wrong key, a gap in `seq`, or
-a broken `prev` link MUST all fail.
+a broken `prev` link MUST all fail. When an **expected head** is supplied (§5.1), a log
+that does not reach it — truncated or diverged — MUST also fail.
+
+### 5.1 Head anchoring and truncation (additive in v1)
+
+A hash chain proves that no entry was altered, inserted, or reordered. But **a prefix of
+a valid chain is itself a valid chain**, so deleting entries from the *end* (truncation),
+or deleting the whole log, **cannot be detected from the log in isolation** — the
+remainder still verifies. Detection requires an out-of-band reference held in a
+**different trust domain** from the writer.
+
+The terminal entry's `hash` commits, through the chain, to the entire log up to that
+point, and in a signed log it is itself signed. The pair **`head = { seq, hash }`** is
+therefore a compact, self-authenticating checkpoint of the whole prefix. A **witness**
+(e.g. a control plane) that retains the latest `head` it has received can later detect
+truncation of any copy of the log presented to it.
+
+A verifier MAY accept an **expected head**. When supplied, in addition to the checks
+above it MUST confirm the log contains an entry at `seq == head.seq` whose
+`hash == head.hash`, and MUST fail otherwise — specifically when the log is shorter than
+`head.seq` (truncated) or its entry at `head.seq` differs (diverged). A log **longer**
+than `head.seq` is acceptable provided the entry at `head.seq` matches: the head is a
+high-water mark, not an end marker. A verifier SHOULD expose the terminal `head` of any
+log it accepts, so the caller can persist it as the next expected head.
+
+**Trust model (informative).** Signed-mode verification is tamper-evident only against an
+adversary that does **not** hold the signing key: such an adversary cannot alter or forge
+a record without breaking a signature. It does **not** defend against a holder of the key
+(e.g. a fully compromised host) rebuilding the log, nor — absent an expected head —
+against truncation. Unsigned verification (no public key) detects only accidental
+corruption, because the hash chain is keyless and anyone can recompute it: **signed mode
+is REQUIRED for any tamper-evidence claim.** Where the threat model includes host
+compromise, keep the signing key in a separate trust domain (HSM / TPM / remote signer)
+and anchor the `head` with an independent witness.
 
 ## 6. Conformance
 
@@ -132,14 +165,18 @@ a broken `prev` link MUST all fail.
 - A conformant **decision engine** MUST be deterministic and side-effect free (§3).
 
 Conformance fixtures live in [`conformance/`](conformance/): `hash-vectors.json`
-(link-hash golden values) and `evidence-records.json` (records that MUST validate or
-MUST be rejected). Implementations in any language SHOULD run these.
+(link-hash golden values), `evidence-records.json` (records that MUST validate or
+MUST be rejected), and `verify-vectors.json` (whole-log `verify` outcomes: a valid
+signed log, plus tampered, forged-signature, reordered, and truncated-against-a-head
+cases that MUST be rejected). Implementations in any language SHOULD run these.
 
 ## 7. Versioning
 
 `evidence.v1` is frozen once published except for additive, backward-compatible
 clarifications. Breaking changes MUST bump the schema id to `evidence.v2`. The
-`schema_version` field lets consumers route by version.
+`schema_version` field lets consumers route by version. Head-anchored verification and
+the `head` output (§5.1) are **additive**: the record shape and the link hash are
+unchanged, and a verifier given no expected head behaves exactly as before.
 
 ## 8. Non-normative: how the kernel is meant to be used
 

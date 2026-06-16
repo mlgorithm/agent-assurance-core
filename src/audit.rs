@@ -159,6 +159,31 @@ impl AuditLog {
         guard.last_hash = hash.clone();
         Ok(hash)
     }
+
+    /// The current head `{ seq, hash }` of the log, or `None` if nothing has been
+    /// appended. Ship this to a witness so truncation can be detected later.
+    pub fn head(&self) -> Option<Head> {
+        let guard = self.inner.lock().unwrap();
+        if guard.seq == 0 {
+            None
+        } else {
+            Some(Head {
+                seq: guard.seq,
+                hash: guard.last_hash.clone(),
+            })
+        }
+    }
+}
+
+/// A compact checkpoint of a log prefix: the sequence number and hash of the
+/// terminal entry. Because the link hash chains, the terminal `hash` commits to
+/// the entire log up to `seq`, and (in a signed log) it is itself signed — so a
+/// `Head` retained by a witness in a separate trust domain is what lets a
+/// verifier detect truncation later. See SPEC.md §5.1.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Head {
+    pub seq: u64,
+    pub hash: String,
 }
 
 /// Result of verifying an audit log's hash chain and optional signatures.
@@ -167,6 +192,9 @@ pub struct VerifyReport {
     pub entries: u64,
     pub ok: bool,
     pub error: Option<String>,
+    /// The terminal `{ seq, hash }` of an accepted log (`None` if empty or on
+    /// failure). Persist it to use as the next `expected` head.
+    pub head: Option<Head>,
 }
 
 /// Compute an entry hash from the previous hash hex and raw record bytes.
@@ -205,13 +233,45 @@ pub fn verify_file(path: &str, pubkey: Option<&VerifyingKey>) -> Result<VerifyRe
     Ok(verify_str(&text, pubkey))
 }
 
+/// Like [`verify_file`], but also assert the log reaches an out-of-band
+/// `expected` head — the way a witness detects truncation. See [`verify_str_with_head`].
+pub fn verify_file_with_head(
+    path: &str,
+    pubkey: Option<&VerifyingKey>,
+    expected: Option<&Head>,
+) -> Result<VerifyReport> {
+    let text = std::fs::read_to_string(path)?;
+    Ok(verify_str_with_head(&text, pubkey, expected))
+}
+
 /// Verify a hash-chained log from its JSONL text. Infallible: malformed input
 /// yields a report with `ok = false` and the first failing line. This is the
 /// portable verification entry point the C ABI / WASM bindings call.
 pub fn verify_str(jsonl: &str, pubkey: Option<&VerifyingKey>) -> VerifyReport {
+    verify_str_with_head(jsonl, pubkey, None)
+}
+
+/// Verify a hash-chained log and, when `expected` is supplied, assert the log
+/// reaches that head.
+///
+/// A hash chain proves nothing was altered, inserted, or reordered — but a
+/// *prefix* of a valid chain is itself a valid chain, so trailing-entry deletion
+/// (truncation) and whole-log deletion cannot be caught from the log alone.
+/// Detection needs an out-of-band reference: a `Head { seq, hash }` retained by a
+/// witness in a different trust domain from the writer. When `expected` is given,
+/// this fails if the log does not reach an entry at `expected.seq` whose hash is
+/// `expected.hash` — i.e. it is shorter than the head (truncated) or diverges from
+/// it. A log *longer* than the head passes provided the entry at `expected.seq`
+/// matches (the head is a high-water mark). See SPEC.md §5.1.
+pub fn verify_str_with_head(
+    jsonl: &str,
+    pubkey: Option<&VerifyingKey>,
+    expected: Option<&Head>,
+) -> VerifyReport {
     let mut prev = GENESIS.to_string();
     let mut expected_seq = 1u64;
     let mut count = 0u64;
+    let mut hash_at_expected: Option<String> = None;
 
     for (idx, line) in jsonl.lines().enumerate() {
         if line.trim().is_empty() {
@@ -257,14 +317,53 @@ pub fn verify_str(jsonl: &str, pubkey: Option<&VerifyingKey>) -> VerifyReport {
         }
 
         prev = entry.hash;
+        if let Some(exp) = expected {
+            if entry.seq == exp.seq {
+                hash_at_expected = Some(prev.clone());
+            }
+        }
         expected_seq += 1;
         count += 1;
     }
 
+    // Truncation / head check against the out-of-band anchor.
+    if let Some(exp) = expected {
+        match &hash_at_expected {
+            None => {
+                let missing = exp.seq.saturating_sub(count);
+                return fail(
+                    count,
+                    format!(
+                        "log truncated: ends at seq {count}, but a signed head was anchored at \
+                         seq {} ({missing} entr{} missing)",
+                        exp.seq,
+                        if missing == 1 { "y" } else { "ies" }
+                    ),
+                );
+            }
+            Some(h) if *h != exp.hash => {
+                return fail(
+                    count,
+                    format!("head mismatch at seq {}: log diverges from the anchored head", exp.seq),
+                );
+            }
+            Some(_) => {}
+        }
+    }
+
+    let head = if count > 0 {
+        Some(Head {
+            seq: count,
+            hash: prev,
+        })
+    } else {
+        None
+    };
     VerifyReport {
         entries: count,
         ok: true,
         error: None,
+        head,
     }
 }
 
@@ -368,6 +467,7 @@ fn fail(entries: u64, msg: String) -> VerifyReport {
         entries,
         ok: false,
         error: Some(msg),
+        head: None,
     }
 }
 
@@ -416,5 +516,63 @@ mod tests {
             .as_deref()
             .unwrap_or_default()
             .contains("hash mismatch"));
+    }
+
+    #[test]
+    fn truncation_is_caught_against_an_anchored_head() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("audit.jsonl");
+        let p = path.to_str().unwrap();
+        let key = generate_signing_key();
+        let pk = key.verifying_key();
+
+        let log = AuditLog::open_signed(p, Some(key.clone())).unwrap();
+        for i in 0..3 {
+            log.append(Record {
+                schema_version: Record::schema_version(),
+                ts: format!("2026-06-15T00:00:0{i}Z"),
+                session_id: None,
+                agent: None,
+                r#type: "tool_call".into(),
+                direction: "request".into(),
+                tool: None,
+                result: None,
+                latency_ms: None,
+                decision: "allow".into(),
+                reason: None,
+                context: None,
+            })
+            .unwrap();
+        }
+        // The witness retains the head it saw.
+        let anchored = log.head().expect("3 entries -> a head");
+        assert_eq!(anchored.seq, 3);
+        drop(log);
+
+        // A clean log verifies, and against its own head, and reports that head.
+        let clean = verify_file_with_head(p, Some(&pk), Some(&anchored)).unwrap();
+        assert!(clean.ok);
+        assert_eq!(clean.head.as_ref(), Some(&anchored));
+
+        // Attacker (no key) deletes the last line.
+        let text = std::fs::read_to_string(p).unwrap();
+        let mut lines: Vec<&str> = text.lines().collect();
+        lines.pop();
+        std::fs::write(p, lines.join("\n") + "\n").unwrap();
+
+        // Without a head, truncation still slips through (the documented gap)...
+        let blind = verify_file(p, Some(&pk)).unwrap();
+        assert!(blind.ok);
+        assert_eq!(blind.entries, 2);
+
+        // ...but against the anchored head it is caught.
+        let caught = verify_file_with_head(p, Some(&pk), Some(&anchored)).unwrap();
+        assert!(!caught.ok);
+        assert!(caught.error.as_deref().unwrap_or_default().contains("truncated"));
+
+        // A wholly deleted log is caught too.
+        std::fs::write(p, "").unwrap();
+        let empty = verify_file_with_head(p, Some(&pk), Some(&anchored)).unwrap();
+        assert!(!empty.ok);
     }
 }

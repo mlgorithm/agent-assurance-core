@@ -10,6 +10,7 @@
 #define AGENT_ASSURANCE_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,9 +32,21 @@ char *aac_link_hash(const char *prev_hex,
 
 /* Verify a hash-chained JSONL log. `pubkey_hex` may be NULL to check the chain
  * only (no signatures). Returns a JSON result string
- * {"ok":<bool>,"entries":<n>,"error":<string|null>} to free with
- * aac_string_free(), or NULL if `jsonl` is NULL / not UTF-8. */
+ * {"ok":<bool>,"entries":<n>,"error":<string|null>,
+ *  "head_seq":<n|null>,"head_hash":<hex|null>}
+ * to free with aac_string_free(), or NULL if `jsonl` is NULL / not UTF-8.
+ * `head_*` carry the terminal {seq,hash} of an accepted log — persist it as the
+ * next expected head. */
 char *aac_verify_log(const char *jsonl, const char *pubkey_hex);
+
+/* Verify, and additionally assert the log reaches the out-of-band head
+ * (expected_seq, expected_hash_hex) — how a witness detects truncation. Pass
+ * expected_hash_hex = NULL to skip the head check (identical to aac_verify_log).
+ * Same JSON result shape. Free with aac_string_free(); NULL if jsonl is
+ * NULL / not UTF-8. */
+char *aac_verify_log_expecting(const char *jsonl, const char *pubkey_hex,
+                               uint64_t expected_seq,
+                               const char *expected_hash_hex);
 
 #ifdef __cplusplus
 } /* extern "C" */

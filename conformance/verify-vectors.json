@@ -1,0 +1,99 @@
+{
+  "cases": [
+    {
+      "expect": {
+        "entries": 3,
+        "ok": true
+      },
+      "jsonl": "{\"seq\":1,\"prev\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"hash\":\"80a0c3a36f9e3ddef9f572b7f528638a7181031c6b3a3f452049d851de884626\",\"sig\":\"e20499f3e44bef4ceb8a95c838421f63a295940d8fdbf9e0045a2dbc7e10d7b2e79cacc9c61e384f9d8f990914ef92f5b68bfcedbd5995becb74767657f95f0a\",\"record\":{\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:00.000Z\",\"agent\":\"alice\",\"type\":\"tool_call\",\"direction\":\"request\",\"decision\":\"allow\"}}\n{\"seq\":2,\"prev\":\"80a0c3a36f9e3ddef9f572b7f528638a7181031c6b3a3f452049d851de884626\",\"hash\":\"eb775ba61ebe142caab35823096d0d6c9cfff6dc89c214c38e63793ecdbad045\",\"sig\":\"7c975c810878e0dd589901f99ba36f108365cd52b81f7e9c46413ac371027ae4cf8925af7215cf9ac375648de67684f750140bdeff201ecee47b0aaf6387b20e\",\"record\":{\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:01.000Z\",\"agent\":\"alice\",\"type\":\"tool_call\",\"direction\":\"request\",\"decision\":\"require_approval\",\"reason\":\"needs sign-off\"}}\n{\"seq\":3,\"prev\":\"eb775ba61ebe142caab35823096d0d6c9cfff6dc89c214c38e63793ecdbad045\",\"hash\":\"311fb0e3c61e122c0dc8de0f3300b533e0ed63015c745a328d90f65997abe532\",\"sig\":\"9d09361a2c4a28796521d6d7010be1bde1683e64cb1b4ebee2511a7f468754005424c5a513ac429ebe9eab5ef9bbf9c6d40dd313889bba99d879ce43be361503\",\"record\":{\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:02.000Z\",\"agent\":\"alice\",\"type\":\"tool_call\",\"direction\":\"request\",\"tool\":{\"name\":\"wire_transfer\",\"arguments\":{\"amount\":1000000}},\"decision\":\"block\",\"reason\":\"over limit\"}}\n",
+      "name": "valid signed log verifies",
+      "pubkey": true
+    },
+    {
+      "expect": {
+        "entries": 3,
+        "ok": true
+      },
+      "jsonl": "{\"seq\":1,\"prev\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"hash\":\"80a0c3a36f9e3ddef9f572b7f528638a7181031c6b3a3f452049d851de884626\",\"sig\":\"e20499f3e44bef4ceb8a95c838421f63a295940d8fdbf9e0045a2dbc7e10d7b2e79cacc9c61e384f9d8f990914ef92f5b68bfcedbd5995becb74767657f95f0a\",\"record\":{\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:00.000Z\",\"agent\":\"alice\",\"type\":\"tool_call\",\"direction\":\"request\",\"decision\":\"allow\"}}\n{\"seq\":2,\"prev\":\"80a0c3a36f9e3ddef9f572b7f528638a7181031c6b3a3f452049d851de884626\",\"hash\":\"eb775ba61ebe142caab35823096d0d6c9cfff6dc89c214c38e63793ecdbad045\",\"sig\":\"7c975c810878e0dd589901f99ba36f108365cd52b81f7e9c46413ac371027ae4cf8925af7215cf9ac375648de67684f750140bdeff201ecee47b0aaf6387b20e\",\"record\":{\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:01.000Z\",\"agent\":\"alice\",\"type\":\"tool_call\",\"direction\":\"request\",\"decision\":\"require_approval\",\"reason\":\"needs sign-off\"}}\n{\"seq\":3,\"prev\":\"eb775ba61ebe142caab35823096d0d6c9cfff6dc89c214c38e63793ecdbad045\",\"hash\":\"311fb0e3c61e122c0dc8de0f3300b533e0ed63015c745a328d90f65997abe532\",\"sig\":\"9d09361a2c4a28796521d6d7010be1bde1683e64cb1b4ebee2511a7f468754005424c5a513ac429ebe9eab5ef9bbf9c6d40dd313889bba99d879ce43be361503\",\"record\":{\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:02.000Z\",\"agent\":\"alice\",\"type\":\"tool_call\",\"direction\":\"request\",\"tool\":{\"name\":\"wire_transfer\",\"arguments\":{\"amount\":1000000}},\"decision\":\"block\",\"reason\":\"over limit\"}}\n",
+      "name": "chain-only verify (no pubkey) accepts the same log",
+      "pubkey": false
+    },
+    {
+      "expect": {
+        "ok": false
+      },
+      "jsonl": "{\"seq\":1,\"prev\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"hash\":\"80a0c3a36f9e3ddef9f572b7f528638a7181031c6b3a3f452049d851de884626\",\"sig\":\"e20499f3e44bef4ceb8a95c838421f63a295940d8fdbf9e0045a2dbc7e10d7b2e79cacc9c61e384f9d8f990914ef92f5b68bfcedbd5995becb74767657f95f0a\",\"record\":{\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:00.000Z\",\"agent\":\"alice\",\"type\":\"tool_call\",\"direction\":\"request\",\"decision\":\"block\"}}\n{\"seq\":2,\"prev\":\"80a0c3a36f9e3ddef9f572b7f528638a7181031c6b3a3f452049d851de884626\",\"hash\":\"eb775ba61ebe142caab35823096d0d6c9cfff6dc89c214c38e63793ecdbad045\",\"sig\":\"7c975c810878e0dd589901f99ba36f108365cd52b81f7e9c46413ac371027ae4cf8925af7215cf9ac375648de67684f750140bdeff201ecee47b0aaf6387b20e\",\"record\":{\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:01.000Z\",\"agent\":\"alice\",\"type\":\"tool_call\",\"direction\":\"request\",\"decision\":\"require_approval\",\"reason\":\"needs sign-off\"}}\n{\"seq\":3,\"prev\":\"eb775ba61ebe142caab35823096d0d6c9cfff6dc89c214c38e63793ecdbad045\",\"hash\":\"311fb0e3c61e122c0dc8de0f3300b533e0ed63015c745a328d90f65997abe532\",\"sig\":\"9d09361a2c4a28796521d6d7010be1bde1683e64cb1b4ebee2511a7f468754005424c5a513ac429ebe9eab5ef9bbf9c6d40dd313889bba99d879ce43be361503\",\"record\":{\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:02.000Z\",\"agent\":\"alice\",\"type\":\"tool_call\",\"direction\":\"request\",\"tool\":{\"name\":\"wire_transfer\",\"arguments\":{\"amount\":1000000}},\"decision\":\"block\",\"reason\":\"over limit\"}}\n",
+      "name": "tampered record is rejected",
+      "pubkey": true
+    },
+    {
+      "expect": {
+        "ok": false
+      },
+      "jsonl": "{\"seq\":1,\"prev\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"hash\":\"80a0c3a36f9e3ddef9f572b7f528638a7181031c6b3a3f452049d851de884626\",\"sig\":\"020499f3e44bef4ceb8a95c838421f63a295940d8fdbf9e0045a2dbc7e10d7b2e79cacc9c61e384f9d8f990914ef92f5b68bfcedbd5995becb74767657f95f0a\",\"record\":{\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:00.000Z\",\"agent\":\"alice\",\"type\":\"tool_call\",\"direction\":\"request\",\"decision\":\"allow\"}}\n{\"seq\":2,\"prev\":\"80a0c3a36f9e3ddef9f572b7f528638a7181031c6b3a3f452049d851de884626\",\"hash\":\"eb775ba61ebe142caab35823096d0d6c9cfff6dc89c214c38e63793ecdbad045\",\"sig\":\"7c975c810878e0dd589901f99ba36f108365cd52b81f7e9c46413ac371027ae4cf8925af7215cf9ac375648de67684f750140bdeff201ecee47b0aaf6387b20e\",\"record\":{\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:01.000Z\",\"agent\":\"alice\",\"type\":\"tool_call\",\"direction\":\"request\",\"decision\":\"require_approval\",\"reason\":\"needs sign-off\"}}\n{\"seq\":3,\"prev\":\"eb775ba61ebe142caab35823096d0d6c9cfff6dc89c214c38e63793ecdbad045\",\"hash\":\"311fb0e3c61e122c0dc8de0f3300b533e0ed63015c745a328d90f65997abe532\",\"sig\":\"9d09361a2c4a28796521d6d7010be1bde1683e64cb1b4ebee2511a7f468754005424c5a513ac429ebe9eab5ef9bbf9c6d40dd313889bba99d879ce43be361503\",\"record\":{\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:02.000Z\",\"agent\":\"alice\",\"type\":\"tool_call\",\"direction\":\"request\",\"tool\":{\"name\":\"wire_transfer\",\"arguments\":{\"amount\":1000000}},\"decision\":\"block\",\"reason\":\"over limit\"}}\n",
+      "name": "forged signature is rejected",
+      "pubkey": true
+    },
+    {
+      "expect": {
+        "ok": false
+      },
+      "jsonl": "{\"seq\":1,\"prev\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"hash\":\"80a0c3a36f9e3ddef9f572b7f528638a7181031c6b3a3f452049d851de884626\",\"sig\":\"e20499f3e44bef4ceb8a95c838421f63a295940d8fdbf9e0045a2dbc7e10d7b2e79cacc9c61e384f9d8f990914ef92f5b68bfcedbd5995becb74767657f95f0a\",\"record\":{\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:00.000Z\",\"agent\":\"alice\",\"type\":\"tool_call\",\"direction\":\"request\",\"decision\":\"allow\"}}\n{\"seq\":3,\"prev\":\"eb775ba61ebe142caab35823096d0d6c9cfff6dc89c214c38e63793ecdbad045\",\"hash\":\"311fb0e3c61e122c0dc8de0f3300b533e0ed63015c745a328d90f65997abe532\",\"sig\":\"9d09361a2c4a28796521d6d7010be1bde1683e64cb1b4ebee2511a7f468754005424c5a513ac429ebe9eab5ef9bbf9c6d40dd313889bba99d879ce43be361503\",\"record\":{\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:02.000Z\",\"agent\":\"alice\",\"type\":\"tool_call\",\"direction\":\"request\",\"tool\":{\"name\":\"wire_transfer\",\"arguments\":{\"amount\":1000000}},\"decision\":\"block\",\"reason\":\"over limit\"}}\n{\"seq\":2,\"prev\":\"80a0c3a36f9e3ddef9f572b7f528638a7181031c6b3a3f452049d851de884626\",\"hash\":\"eb775ba61ebe142caab35823096d0d6c9cfff6dc89c214c38e63793ecdbad045\",\"sig\":\"7c975c810878e0dd589901f99ba36f108365cd52b81f7e9c46413ac371027ae4cf8925af7215cf9ac375648de67684f750140bdeff201ecee47b0aaf6387b20e\",\"record\":{\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:01.000Z\",\"agent\":\"alice\",\"type\":\"tool_call\",\"direction\":\"request\",\"decision\":\"require_approval\",\"reason\":\"needs sign-off\"}}\n",
+      "name": "reordered entries are rejected",
+      "pubkey": true
+    },
+    {
+      "expect": {
+        "entries": 2,
+        "ok": true
+      },
+      "jsonl": "{\"seq\":1,\"prev\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"hash\":\"80a0c3a36f9e3ddef9f572b7f528638a7181031c6b3a3f452049d851de884626\",\"sig\":\"e20499f3e44bef4ceb8a95c838421f63a295940d8fdbf9e0045a2dbc7e10d7b2e79cacc9c61e384f9d8f990914ef92f5b68bfcedbd5995becb74767657f95f0a\",\"record\":{\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:00.000Z\",\"agent\":\"alice\",\"type\":\"tool_call\",\"direction\":\"request\",\"decision\":\"allow\"}}\n{\"seq\":2,\"prev\":\"80a0c3a36f9e3ddef9f572b7f528638a7181031c6b3a3f452049d851de884626\",\"hash\":\"eb775ba61ebe142caab35823096d0d6c9cfff6dc89c214c38e63793ecdbad045\",\"sig\":\"7c975c810878e0dd589901f99ba36f108365cd52b81f7e9c46413ac371027ae4cf8925af7215cf9ac375648de67684f750140bdeff201ecee47b0aaf6387b20e\",\"record\":{\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:01.000Z\",\"agent\":\"alice\",\"type\":\"tool_call\",\"direction\":\"request\",\"decision\":\"require_approval\",\"reason\":\"needs sign-off\"}}\n",
+      "name": "truncated tail passes WITHOUT a head (the documented gap)",
+      "pubkey": true
+    },
+    {
+      "expect": {
+        "ok": false
+      },
+      "expected_head": {
+        "hash": "311fb0e3c61e122c0dc8de0f3300b533e0ed63015c745a328d90f65997abe532",
+        "seq": 3
+      },
+      "jsonl": "{\"seq\":1,\"prev\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"hash\":\"80a0c3a36f9e3ddef9f572b7f528638a7181031c6b3a3f452049d851de884626\",\"sig\":\"e20499f3e44bef4ceb8a95c838421f63a295940d8fdbf9e0045a2dbc7e10d7b2e79cacc9c61e384f9d8f990914ef92f5b68bfcedbd5995becb74767657f95f0a\",\"record\":{\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:00.000Z\",\"agent\":\"alice\",\"type\":\"tool_call\",\"direction\":\"request\",\"decision\":\"allow\"}}\n{\"seq\":2,\"prev\":\"80a0c3a36f9e3ddef9f572b7f528638a7181031c6b3a3f452049d851de884626\",\"hash\":\"eb775ba61ebe142caab35823096d0d6c9cfff6dc89c214c38e63793ecdbad045\",\"sig\":\"7c975c810878e0dd589901f99ba36f108365cd52b81f7e9c46413ac371027ae4cf8925af7215cf9ac375648de67684f750140bdeff201ecee47b0aaf6387b20e\",\"record\":{\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:01.000Z\",\"agent\":\"alice\",\"type\":\"tool_call\",\"direction\":\"request\",\"decision\":\"require_approval\",\"reason\":\"needs sign-off\"}}\n",
+      "name": "truncated tail is REJECTED against the anchored head",
+      "pubkey": true
+    },
+    {
+      "expect": {
+        "ok": false
+      },
+      "expected_head": {
+        "hash": "311fb0e3c61e122c0dc8de0f3300b533e0ed63015c745a328d90f65997abe532",
+        "seq": 3
+      },
+      "jsonl": "",
+      "name": "empty log is REJECTED against the anchored head",
+      "pubkey": true
+    },
+    {
+      "expect": {
+        "entries": 3,
+        "ok": true
+      },
+      "expected_head": {
+        "hash": "311fb0e3c61e122c0dc8de0f3300b533e0ed63015c745a328d90f65997abe532",
+        "seq": 3
+      },
+      "jsonl": "{\"seq\":1,\"prev\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"hash\":\"80a0c3a36f9e3ddef9f572b7f528638a7181031c6b3a3f452049d851de884626\",\"sig\":\"e20499f3e44bef4ceb8a95c838421f63a295940d8fdbf9e0045a2dbc7e10d7b2e79cacc9c61e384f9d8f990914ef92f5b68bfcedbd5995becb74767657f95f0a\",\"record\":{\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:00.000Z\",\"agent\":\"alice\",\"type\":\"tool_call\",\"direction\":\"request\",\"decision\":\"allow\"}}\n{\"seq\":2,\"prev\":\"80a0c3a36f9e3ddef9f572b7f528638a7181031c6b3a3f452049d851de884626\",\"hash\":\"eb775ba61ebe142caab35823096d0d6c9cfff6dc89c214c38e63793ecdbad045\",\"sig\":\"7c975c810878e0dd589901f99ba36f108365cd52b81f7e9c46413ac371027ae4cf8925af7215cf9ac375648de67684f750140bdeff201ecee47b0aaf6387b20e\",\"record\":{\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:01.000Z\",\"agent\":\"alice\",\"type\":\"tool_call\",\"direction\":\"request\",\"decision\":\"require_approval\",\"reason\":\"needs sign-off\"}}\n{\"seq\":3,\"prev\":\"eb775ba61ebe142caab35823096d0d6c9cfff6dc89c214c38e63793ecdbad045\",\"hash\":\"311fb0e3c61e122c0dc8de0f3300b533e0ed63015c745a328d90f65997abe532\",\"sig\":\"9d09361a2c4a28796521d6d7010be1bde1683e64cb1b4ebee2511a7f468754005424c5a513ac429ebe9eab5ef9bbf9c6d40dd313889bba99d879ce43be361503\",\"record\":{\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:02.000Z\",\"agent\":\"alice\",\"type\":\"tool_call\",\"direction\":\"request\",\"tool\":{\"name\":\"wire_transfer\",\"arguments\":{\"amount\":1000000}},\"decision\":\"block\",\"reason\":\"over limit\"}}\n",
+      "name": "valid log matches its anchored head",
+      "pubkey": true
+    }
+  ],
+  "description": "Verifier conformance: whole JSONL logs with expected verify() outcomes, signed with the FIXED test key below (Ed25519/RFC 8032 is deterministic). See SPEC.md sections 5 and 6. Regenerate with `cargo run --example gen_verify_vectors`.",
+  "head": {
+    "hash": "311fb0e3c61e122c0dc8de0f3300b533e0ed63015c745a328d90f65997abe532",
+    "seq": 3
+  },
+  "pubkey_hex": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+  "signing_key_hex": "0707070707070707070707070707070707070707070707070707070707070707"
+}
