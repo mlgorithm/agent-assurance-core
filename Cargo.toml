@@ -1,8 +1,8 @@
 [package]
 name = "agent-assurance-core"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-description = "Core policy and evidence primitives for agent action assurance"
+description = "An OS-style assurance kernel for untrusted AI agents: policy + capability + risk-budget decisions and head-anchored, tamper-evident action evidence"
 license = "Apache-2.0"
 
 [lib]

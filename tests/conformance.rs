@@ -41,3 +41,42 @@ fn evidence_record_vectors() {
         );
     }
 }
+
+#[test]
+fn verify_vectors() {
+    use agent_assurance_core::audit::{
+        load_verifying_key_hex, verify_str_with, ExpectedHead, VerifyOptions,
+    };
+    let doc: Value =
+        serde_json::from_str(include_str!("../conformance/verify-vectors.json")).unwrap();
+    for case in doc["cases"].as_array().expect("cases array") {
+        let name = case["name"].as_str().unwrap();
+        let jsonl = case["jsonl"].as_str().unwrap();
+        let expect_ok = case["expect_ok"].as_bool().unwrap();
+        let pubkey = case
+            .get("pubkey")
+            .and_then(|v| v.as_str())
+            .map(|h| load_verifying_key_hex(h).expect("pubkey hex"));
+        let expected_head = case.get("expected_head").map(|h| ExpectedHead {
+            seq: h["seq"].as_u64().unwrap(),
+            hash: h["hash"].as_str().unwrap().to_string(),
+        });
+        let allow_empty = case
+            .get("allow_empty")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let report = verify_str_with(
+            jsonl,
+            &VerifyOptions {
+                pubkey: pubkey.as_ref(),
+                expected_head,
+                allow_empty,
+            },
+        );
+        assert_eq!(
+            report.ok, expect_ok,
+            "verify case '{name}': expected ok={expect_ok}, got {} (err={:?})",
+            report.ok, report.error
+        );
+    }
+}

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mlgorithm.dev/schema/agent-assurance.receipt.v1.json",
+  "title": "agent-assurance.receipt.v1",
+  "description": "An Assurance Receipt: the kernel's verifiable account of one mediated agent action, grouped STRICTLY by provenance. `fact` is independently verifiable by anyone; `attested` is a verdict trustworthy only if you trust the named component and its key; `claimed` is self-reported by the untrusted agent and must never be treated as evidence. Receipts are embedded in the hash-chained evidence log (record `context`) so they inherit head-anchored tamper-evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "fact", "attested"],
+  "properties": {
+    "schema_version": { "const": "agent-assurance.receipt.v1" },
+    "fact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action_type", "tool", "prev_head", "seq", "ts"],
+      "properties": {
+        "action_type": { "type": "string" },
+        "tool": { "type": "string" },
+        "agent": { "type": ["string", "null"] },
+        "args_hash": { "type": ["string", "null"], "description": "sha256 hex of the canonical action arguments" },
+        "policy_hash": { "type": ["string", "null"], "description": "digest of the policy in force" },
+        "prev_head": { "type": "string", "description": "chain head this action's evidence links onto" },
+        "head": { "type": ["string", "null"], "description": "new chain head once the evidence entry is sealed" },
+        "seq": { "type": "integer", "minimum": 0 },
+        "ts": { "type": "string", "description": "RFC3339 timestamp (supplied by the host)" }
+      }
+    },
+    "attested": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "capability_satisfied", "monitor_accept", "risk", "risk_budget_remaining"],
+      "properties": {
+        "decision": {
+          "type": "string",
+          "enum": [
+            "allow", "block", "would_block", "require_approval",
+            "would_require_approval", "approved", "denied", "timeout", "observe"
+          ]
+        },
+        "reason": { "type": ["string", "null"] },
+        "policy_rule": { "type": ["string", "null"] },
+        "required_capability": { "type": ["string", "null"] },
+        "capability_satisfied": { "type": "boolean" },
+        "monitor_accept": { "type": "boolean" },
+        "risk": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+        "monitor_signals": { "type": "array", "items": { "type": "string" } },
+        "risk_budget_remaining": { "type": "integer" },
+        "attester": { "type": ["string", "null"] }
+      }
+    },
+    "claimed": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "intent": { "type": ["string", "null"], "description": "agent self-reported; UNTRUSTED" }
+      }
+    }
+  }
+}

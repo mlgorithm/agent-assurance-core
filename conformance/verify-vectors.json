@@ -1,0 +1,66 @@
+{
+  "description": "Verifier conformance cases for SPEC \u00a75. Each case feeds `jsonl` to the verifier with the given options; a conformant verifier MUST produce expect_ok. These pin the Theorem-3 guarantees: empty/truncated/rolled-back logs fail, and a head anchor is REQUIRED to catch tail truncation (the chain alone accepts a truncated prefix).",
+  "signing_key_seed_hex": "0707070707070707070707070707070707070707070707070707070707070707",
+  "pubkey": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+  "cases": [
+    {
+      "name": "valid two-entry signed chain, head-anchored",
+      "jsonl": "{\"seq\":1,\"prev\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"hash\":\"829fbd5c7e4f3560681abfd97b2359f26b6ed3db14077b75fdab5e27becfb217\",\"sig\":\"179ac4fb4c6bb7f9b254bd3fa0cd8ea4b1ce3cf6831a219dd63518f5cdd43e28a01d8f9e0072889f627cdc3751a63868daca637e8f8d8bb2e5ce1c7ffde06902\",\"record\":{\"decision\":\"allow\",\"direction\":\"request\",\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:00.000Z\",\"type\":\"tool_call\"}}\n{\"seq\":2,\"prev\":\"829fbd5c7e4f3560681abfd97b2359f26b6ed3db14077b75fdab5e27becfb217\",\"hash\":\"80f5785b2bf162524c12bc1701b7bc1e4b7cb11efaa258dab3927baae63e8464\",\"sig\":\"986af029667e8ca39706dab1a31812d7a1f42a3b46411d738b533bc97d409b8df64d256aefc15f1a4cf2d1f91e5555130b78d4dac8e7f4dd632257684f904605\",\"record\":{\"decision\":\"block\",\"direction\":\"request\",\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:01.000Z\",\"type\":\"tool_call\"}}\n",
+      "pubkey": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+      "expected_head": {
+        "seq": 2,
+        "hash": "80f5785b2bf162524c12bc1701b7bc1e4b7cb11efaa258dab3927baae63e8464"
+      },
+      "expect_ok": true
+    },
+    {
+      "name": "valid chain, chain-only (no anchor) is ok",
+      "jsonl": "{\"seq\":1,\"prev\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"hash\":\"829fbd5c7e4f3560681abfd97b2359f26b6ed3db14077b75fdab5e27becfb217\",\"sig\":\"179ac4fb4c6bb7f9b254bd3fa0cd8ea4b1ce3cf6831a219dd63518f5cdd43e28a01d8f9e0072889f627cdc3751a63868daca637e8f8d8bb2e5ce1c7ffde06902\",\"record\":{\"decision\":\"allow\",\"direction\":\"request\",\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:00.000Z\",\"type\":\"tool_call\"}}\n{\"seq\":2,\"prev\":\"829fbd5c7e4f3560681abfd97b2359f26b6ed3db14077b75fdab5e27becfb217\",\"hash\":\"80f5785b2bf162524c12bc1701b7bc1e4b7cb11efaa258dab3927baae63e8464\",\"sig\":\"986af029667e8ca39706dab1a31812d7a1f42a3b46411d738b533bc97d409b8df64d256aefc15f1a4cf2d1f91e5555130b78d4dac8e7f4dd632257684f904605\",\"record\":{\"decision\":\"block\",\"direction\":\"request\",\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:01.000Z\",\"type\":\"tool_call\"}}\n",
+      "pubkey": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+      "expect_ok": true
+    },
+    {
+      "name": "tail-truncated log FAILS against head anchor",
+      "jsonl": "{\"seq\":1,\"prev\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"hash\":\"829fbd5c7e4f3560681abfd97b2359f26b6ed3db14077b75fdab5e27becfb217\",\"sig\":\"179ac4fb4c6bb7f9b254bd3fa0cd8ea4b1ce3cf6831a219dd63518f5cdd43e28a01d8f9e0072889f627cdc3751a63868daca637e8f8d8bb2e5ce1c7ffde06902\",\"record\":{\"decision\":\"allow\",\"direction\":\"request\",\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:00.000Z\",\"type\":\"tool_call\"}}\n",
+      "pubkey": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+      "expected_head": {
+        "seq": 2,
+        "hash": "80f5785b2bf162524c12bc1701b7bc1e4b7cb11efaa258dab3927baae63e8464"
+      },
+      "expect_ok": false
+    },
+    {
+      "name": "tail-truncated prefix PASSES chain-only \u2014 why anchoring is required",
+      "jsonl": "{\"seq\":1,\"prev\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"hash\":\"829fbd5c7e4f3560681abfd97b2359f26b6ed3db14077b75fdab5e27becfb217\",\"sig\":\"179ac4fb4c6bb7f9b254bd3fa0cd8ea4b1ce3cf6831a219dd63518f5cdd43e28a01d8f9e0072889f627cdc3751a63868daca637e8f8d8bb2e5ce1c7ffde06902\",\"record\":{\"decision\":\"allow\",\"direction\":\"request\",\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:00.000Z\",\"type\":\"tool_call\"}}\n",
+      "pubkey": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+      "expect_ok": true
+    },
+    {
+      "name": "empty log is invalid by default (missing evidence is a failure)",
+      "jsonl": "",
+      "expect_ok": false
+    },
+    {
+      "name": "empty log is ok only when allow_empty is set",
+      "jsonl": "",
+      "allow_empty": true,
+      "expect_ok": true
+    },
+    {
+      "name": "tampered record (decision flipped, hash stale) fails",
+      "jsonl": "{\"seq\":1,\"prev\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"hash\":\"829fbd5c7e4f3560681abfd97b2359f26b6ed3db14077b75fdab5e27becfb217\",\"sig\":\"179ac4fb4c6bb7f9b254bd3fa0cd8ea4b1ce3cf6831a219dd63518f5cdd43e28a01d8f9e0072889f627cdc3751a63868daca637e8f8d8bb2e5ce1c7ffde06902\",\"record\":{\"decision\":\"block\",\"direction\":\"request\",\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:00.000Z\",\"type\":\"tool_call\"}}\n",
+      "pubkey": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+      "expect_ok": false
+    },
+    {
+      "name": "wrong entry count vs anchor fails even if head hash present",
+      "jsonl": "{\"seq\":1,\"prev\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"hash\":\"829fbd5c7e4f3560681abfd97b2359f26b6ed3db14077b75fdab5e27becfb217\",\"sig\":\"179ac4fb4c6bb7f9b254bd3fa0cd8ea4b1ce3cf6831a219dd63518f5cdd43e28a01d8f9e0072889f627cdc3751a63868daca637e8f8d8bb2e5ce1c7ffde06902\",\"record\":{\"decision\":\"allow\",\"direction\":\"request\",\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:00.000Z\",\"type\":\"tool_call\"}}\n{\"seq\":2,\"prev\":\"829fbd5c7e4f3560681abfd97b2359f26b6ed3db14077b75fdab5e27becfb217\",\"hash\":\"80f5785b2bf162524c12bc1701b7bc1e4b7cb11efaa258dab3927baae63e8464\",\"sig\":\"986af029667e8ca39706dab1a31812d7a1f42a3b46411d738b533bc97d409b8df64d256aefc15f1a4cf2d1f91e5555130b78d4dac8e7f4dd632257684f904605\",\"record\":{\"decision\":\"block\",\"direction\":\"request\",\"schema_version\":\"agent-assurance.evidence.v1\",\"ts\":\"2026-01-01T00:00:01.000Z\",\"type\":\"tool_call\"}}\n",
+      "pubkey": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+      "expected_head": {
+        "seq": 3,
+        "hash": "80f5785b2bf162524c12bc1701b7bc1e4b7cb11efaa258dab3927baae63e8464"
+      },
+      "expect_ok": false
+    }
+  ]
+}

@@ -48,7 +48,47 @@ def main():
         got = link_hash(v["prev"], v["record_bytes"].encode("utf-8"))
         assert got == v["expected_hash"], f"{v['name']}: {got} != {v['expected_hash']}"
 
-    print(f"C ABI OK via ctypes: version + {len(vectors)} hash vectors match")
+    # Verifier conformance — run the SAME verify-vectors the Rust suite runs,
+    # including the head-anchored truncation cases, through the C ABI.
+    lib.aac_verify_log.restype = ctypes.c_void_p
+    lib.aac_verify_log.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+    lib.aac_verify_log_anchored.restype = ctypes.c_void_p
+    lib.aac_verify_log_anchored.argtypes = [
+        ctypes.c_char_p,
+        ctypes.c_char_p,
+        ctypes.c_uint64,
+        ctypes.c_char_p,
+    ]
+
+    def verify(jsonl, pubkey=None, anchor=None):
+        pk = pubkey.encode() if pubkey else None
+        if anchor is None:
+            ptr = lib.aac_verify_log(jsonl.encode(), pk)
+        else:
+            ptr = lib.aac_verify_log_anchored(
+                jsonl.encode(), pk, anchor["seq"], anchor["hash"].encode()
+            )
+        out = ctypes.cast(ptr, ctypes.c_char_p).value.decode()
+        lib.aac_string_free(ptr)
+        return json.loads(out)
+
+    with open(os.path.join(ROOT, "conformance", "verify-vectors.json")) as fh:
+        vcases = json.load(fh)["cases"]
+
+    ran = 0
+    for c in vcases:
+        # The C ABI has no `allow_empty` flag (default is fail-closed), so skip
+        # the one case that needs it; every other case must agree exactly.
+        if c.get("allow_empty"):
+            continue
+        res = verify(c["jsonl"], c.get("pubkey"), c.get("expected_head"))
+        assert res["ok"] == c["expect_ok"], f"{c['name']}: {res} != expect_ok={c['expect_ok']}"
+        ran += 1
+
+    print(
+        f"C ABI OK via ctypes: version + {len(vectors)} hash vectors "
+        f"+ {ran} verify vectors (incl. truncation) match"
+    )
 
 
 if __name__ == "__main__":

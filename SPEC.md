@@ -1,12 +1,18 @@
 # Agent Assurance — core specification
 
-**Version 1 (`evidence.v1`). Status: draft.**
+**Version 1 — `evidence.v1` + `receipt.v1`. Status: draft.**
 
 This is the language-neutral specification for the agent-assurance kernel: the data
 shapes and algorithms that every implementation and every distribution (firewall,
 control plane, benchmark, embedded monitor) MUST share so their decisions and
 evidence interoperate. The Rust crate in this repository is the **reference
 implementation**; this document is the source of truth.
+
+The kernel treats the agent as an **untrusted process** and a tool call as its
+"syscall": it mediates each proposed action, decides under an explicit policy and
+capability model, and emits a provenance-typed, tamper-evident receipt. It does
+not certify that an agent is safe; it certifies that an *execution* was mediated,
+bounded, and recorded under a stated trust model (§9–§10).
 
 The key words MUST, MUST NOT, SHOULD, and MAY are to be interpreted as in RFC 2119.
 
@@ -96,6 +102,26 @@ fields; they go in `context`. This keeps one record shape valid for cloud softwa
 embedded actuators alike. Emitters MUST produce records that validate against the
 schema (`additionalProperties` is `false`).
 
+## 4a. Assurance Receipt (`receipt.v1`)
+
+The evidence record says *what happened*. An **Assurance Receipt** says, for one
+mediated action, *what was checked, and how much each claim can be trusted*. Its
+JSON Schema is [`schema/agent-assurance.receipt.v1.json`](schema/agent-assurance.receipt.v1.json).
+
+Receipt fields are grouped **strictly by provenance**, because not all evidence
+warrants the same trust:
+
+| Group | Provenance | Trust |
+|---|---|---|
+| `fact` | independently verifiable | trust no one — recompute it (content hashes, tool invoked, policy digest, chain head/`seq`) |
+| `attested` | a component's verdict | trust *iff* you trust that component and its key (policy decision, capability check, monitor verdict, risk budget) |
+| `claimed` | agent self-report | **untrusted** — recorded for context only (e.g. declared `intent`) |
+
+An emitter MUST place each field in the group matching its provenance. In
+particular, anything the agent reports about *itself* MUST be `claimed` — never
+`fact` or `attested`. A receipt is embedded in the evidence record `context`, so
+it inherits the chain's tamper-evidence and head anchoring (§5).
+
 ## 5. Audit chain
 
 Records are appended to a log as **entries**. Each entry is one line:
@@ -119,9 +145,30 @@ Records are appended to a log as **entries**. Each entry is one line:
 **Verification.** A verifier MUST, from genesis: check `seq` continuity, check
 `prev` equals the previous `hash`, recompute the link hash over the stored
 `record_bytes` and check it equals `hash`, and (when a public key is supplied) check
-`sig`. Any failure means the log is invalid; a verifier MUST report the first failing
-entry. A tampered `record`, a forged/absent signature, a wrong key, a gap in `seq`, or
-a broken `prev` link MUST all fail.
+`sig`. It MUST report the first failing entry. A tampered `record`, a
+forged/absent signature, a wrong key, a gap in `seq`, or a broken `prev` link MUST
+all fail.
+
+The per-entry chain alone is **not sufficient** — a truncated *prefix* of a valid
+log is itself a valid log, so the chain cannot detect tail truncation, rollback,
+or a full wipe. A conformant verifier MUST therefore also enforce two whole-log
+properties:
+
+- **Non-empty.** An empty log (zero entries) MUST verify as **invalid** unless the
+  caller explicitly opts in (`allow_empty`). Missing evidence is a failure signal,
+  not a pass.
+- **Head anchoring.** Given an out-of-band anchor `(seq_n, hash_n)` — the head a
+  witness recorded as the log was produced — the verifier MUST check the log ends
+  at exactly that anchor: the entry count equals `seq_n` **and** the final `hash`
+  equals `hash_n`. Without an anchor, tail truncation/rollback/wipe are
+  undetectable; with it, they fail.
+
+The writer returns the head from each append; a control plane records the latest
+head per log and supplies it as the anchor when it re-verifies. The anchor's
+integrity rests on the witness, not on the log being checked. This is **Theorem 3**
+(§9), and the one integrity guarantee this core establishes with no dependence on
+the mediation assumption. Verifier conformance cases:
+[`conformance/verify-vectors.json`](conformance/verify-vectors.json).
 
 ## 6. Conformance
 
@@ -132,8 +179,10 @@ a broken `prev` link MUST all fail.
 - A conformant **decision engine** MUST be deterministic and side-effect free (§3).
 
 Conformance fixtures live in [`conformance/`](conformance/): `hash-vectors.json`
-(link-hash golden values) and `evidence-records.json` (records that MUST validate or
-MUST be rejected). Implementations in any language SHOULD run these.
+(link-hash golden values), `evidence-records.json` (records that MUST validate or
+MUST be rejected), and `verify-vectors.json` (whole logs with options that a
+verifier MUST accept or reject — pinning the empty-log and head-anchoring rules of
+§5). Implementations in any language SHOULD run all three.
 
 ## 7. Versioning
 
@@ -148,3 +197,87 @@ engine decides, the host honors the decision and executes/refuses/holds, and the
 emitter writes the evidence. The kernel decides and witnesses; it never acts. Adapters
 and deployment modes (embedded library, sidecar/proxy, gateway, offline verifier,
 certified physical monitor) are distributions on top of this core.
+
+## 9. Formal model and theorems
+
+The kernel is the transition `K(s, a) -> (decision, s', receipt)`. Kernel state is
+`s = { capabilities, risk_budget, policy, monitor, log_head, seq }`; an action `a`
+is a `ProposedAction`; `decision ∈ {allow, deny, require_human_review}`. The
+transition is deterministic and performs **no I/O** (the host supplies the
+timestamp and appends the evidence).
+
+**Soundness invariant.** The kernel MUST allow an action only when every clause
+holds:
+
+```
+decision(a) = allow  ⇒  policy.allow(a)
+                        ∧ required_capability(a) ∈ capabilities
+                        ∧ monitor.accept(a)
+                        ∧ risk_budget.affords(cost(a))
+```
+
+The reference kernel realizes this by fail-closed precedence (policy block,
+missing capability, monitor reject → deny; policy approval, exhausted budget →
+review; otherwise allow) and asserts it **biconditionally** as a property test.
+
+Each theorem below holds **under explicitly stated assumptions**. The implication
+itself is shallow; the engineering value is the *minimization and naming* of the
+assumptions. The load-bearing one is **Assumption M (complete mediation)** — every
+external action actually reaches the kernel — which the kernel does **not**
+establish on its own (§10).
+
+- **Theorem 1 (Enforcement Soundness).** If M holds and the kernel allows only
+  when `policy.allow`, no policy-denied action reaches the tool layer. *(Also
+  assumes policy is total/decidable; fail-closed on policy error.)*
+- **Theorem 2 (Capability Safety).** If M holds and every tool action requires a
+  held capability, an agent cannot act outside its capability set. This bounds
+  *authority*, **not** *misuse of legitimate authority* — the confused-deputy /
+  prompt-injection case is outside what capabilities can decide and falls to the
+  monitor (empirical).
+- **Theorem 3 (Trace Integrity).** Under a collision-resistant hash and a trusted
+  head anchor, deletion, reordering, truncation, or wipe of accepted events is
+  detectable (§5). **This is the only theorem the core establishes with no
+  dependence on M**; it is enforced and regression-tested here.
+- **Theorem 4 (Review-Gate Safety).** If M holds and policy marks an action class
+  as requiring approval (or the budget is exhausted), the kernel denies it unless
+  approval evidence exists; so no such action executes without review.
+
+**Empirical assurance.** Properties the kernel cannot prove — monitor soundness,
+prompt-injection resistance — are **not** theorems. They are measured
+adversarially (`agent-crash-lab`) and reported as confidence bounds (e.g. *k
+failures in n trials → ~95% upper bound 3/n at k = 0*). Formal assurance bounds
+what the kernel enforces by construction; empirical assurance bounds the rest.
+Neither yields "safe".
+
+## 10. Trust model (TCB) and the mediation assumption
+
+The agent is **not** in the trusted computing base. The TCB is deliberately small:
+
+- **Trusted:** the kernel, the policy evaluator, the capability and budget
+  accounting, the monitor implementation, the verifier, and the hash/anchor/key
+  mechanism.
+- **Untrusted:** the model, the prompt, the agent/planner, tool outputs,
+  user-provided content, and the external environment.
+
+**Complete mediation (Assumption M).** Every theorem that constrains *actions*
+(1, 2, 4) assumes every external action is routed through the kernel. The kernel
+is the syscall *filter*, not the privilege *ring*: nothing in this core stops an
+agent process from egressing directly (opening its own socket, shelling out). M
+MUST be discharged by a deployment boundary **outside this crate** — a sandbox /
+network namespace / egress control whose only path out is the enforcing
+distribution — and SHOULD be validated for a given deployment by an adversarial
+mediation-bypass test (`agent-crash-lab`). A distribution that claims Theorem 1, 2,
+or 4 without establishing M is making a decorative claim.
+
+**Local signing is not proof against a compromised host.** A signature shows the
+key-holder attested the head; a compromised signing host can re-sign a rewritten
+chain. Local signatures protect evidence against parties *without* the key
+(tampering after export, another tenant) — not against the signing host itself.
+External, independent head witnessing (a transparency-log-style anchor) is what
+closes that gap.
+
+## 11. Assurance levels
+
+Deployments are graded **AA-0…AA-5** by *what an independent party can verify*, not
+by what the system does internally. See
+[`ASSURANCE-LEVELS.md`](ASSURANCE-LEVELS.md).

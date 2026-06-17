@@ -159,6 +159,18 @@ impl AuditLog {
         guard.last_hash = hash.clone();
         Ok(hash)
     }
+
+    /// The current chain head as an [`ExpectedHead`] anchor: the `seq` and
+    /// `hash` of the last entry (or `seq = 0`, [`GENESIS`] before any append).
+    /// A witness records this as each entry is produced and later passes it to
+    /// [`verify_file_with`] to make the stored log truncation-evident.
+    pub fn head(&self) -> ExpectedHead {
+        let guard = self.inner.lock().unwrap();
+        ExpectedHead {
+            seq: guard.seq,
+            hash: guard.last_hash.clone(),
+        }
+    }
 }
 
 /// Result of verifying an audit log's hash chain and optional signatures.
@@ -167,6 +179,40 @@ pub struct VerifyReport {
     pub entries: u64,
     pub ok: bool,
     pub error: Option<String>,
+    /// The chain head (last entry's hash) after verification, or [`GENESIS`] if
+    /// the log was empty. A witness (e.g. the control plane) records this and
+    /// passes it back as an [`ExpectedHead`] to make the *next* verification
+    /// truncation-evident. See SPEC §5 (Theorem 3, Trace Integrity).
+    pub head: String,
+}
+
+/// An out-of-band anchor for the chain head: the `seq` and `hash` a verifier
+/// expects the log to **end** at, supplied by whoever witnessed the head as it
+/// was produced (the writer returns it from [`AuditLog::append`]; a control
+/// plane records the latest as each entry streams up).
+///
+/// The chain alone cannot detect tail truncation, rollback, or a full wipe — a
+/// truncated prefix is itself a perfectly valid chain. Anchoring closes that
+/// gap: the log must end at exactly this `(seq, hash)`.
+#[derive(Clone, Debug)]
+pub struct ExpectedHead {
+    pub seq: u64,
+    pub hash: String,
+}
+
+/// Options for [`verify_str_with`] / [`verify_file_with`].
+#[derive(Default)]
+pub struct VerifyOptions<'a> {
+    /// Public key for signature checks. `None` checks chain integrity only —
+    /// which, for an unsigned log, is corruption-detection, not tamper-evidence.
+    pub pubkey: Option<&'a VerifyingKey>,
+    /// Out-of-band head anchor. Without it, tail truncation is **not**
+    /// detectable; supply it for the Theorem-3 guarantee.
+    pub expected_head: Option<ExpectedHead>,
+    /// Treat an empty log (zero entries) as valid. Default `false`: missing
+    /// evidence is itself a failure signal, so a wiped/empty log verifies as
+    /// **not ok** unless a caller explicitly opts in.
+    pub allow_empty: bool,
 }
 
 /// Compute an entry hash from the previous hash hex and raw record bytes.
@@ -200,15 +246,44 @@ pub fn verify_entry(
 }
 
 /// Recompute the chain from genesis and confirm every link, reading from a file.
+/// Chain + (optional) signatures only; for tamper-evidence supply an anchor via
+/// [`verify_file_with`].
 pub fn verify_file(path: &str, pubkey: Option<&VerifyingKey>) -> Result<VerifyReport> {
     let text = std::fs::read_to_string(path)?;
     Ok(verify_str(&text, pubkey))
 }
 
-/// Verify a hash-chained log from its JSONL text. Infallible: malformed input
-/// yields a report with `ok = false` and the first failing line. This is the
-/// portable verification entry point the C ABI / WASM bindings call.
+/// As [`verify_file`], but with full [`VerifyOptions`] (head anchor, empty
+/// policy). This is the entry point a control plane uses to make a stored log
+/// truncation-evident against the head it witnessed.
+pub fn verify_file_with(path: &str, opts: &VerifyOptions) -> Result<VerifyReport> {
+    let text = std::fs::read_to_string(path)?;
+    Ok(verify_str_with(&text, opts))
+}
+
+/// Verify a hash-chained log from its JSONL text (chain + optional signatures,
+/// no anchor). Empty input is reported as **not ok**. Infallible: malformed
+/// input yields a report with `ok = false` and the first failing line.
 pub fn verify_str(jsonl: &str, pubkey: Option<&VerifyingKey>) -> VerifyReport {
+    verify_str_with(
+        jsonl,
+        &VerifyOptions {
+            pubkey,
+            ..Default::default()
+        },
+    )
+}
+
+/// Verify a hash-chained log from its JSONL text with full options. This is the
+/// portable verification entry point the C ABI / WASM bindings call.
+///
+/// From genesis it checks, per entry: `seq` continuity, the `prev` link,
+/// recomputes the link hash over the **stored** record bytes, and (with a key)
+/// the signature. It then enforces the two whole-log properties the per-entry
+/// chain cannot: a non-empty log (unless `allow_empty`), and — when an
+/// `expected_head` is given — that the log ends at exactly that `(seq, hash)`,
+/// which is what makes truncation, rollback, and wipe detectable (Theorem 3).
+pub fn verify_str_with(jsonl: &str, opts: &VerifyOptions) -> VerifyReport {
     let mut prev = GENESIS.to_string();
     let mut expected_seq = 1u64;
     let mut count = 0u64;
@@ -221,17 +296,25 @@ pub fn verify_str(jsonl: &str, pubkey: Option<&VerifyingKey>) -> VerifyReport {
 
         let entry: Entry = match serde_json::from_str(line) {
             Ok(e) => e,
-            Err(e) => return fail(count, format!("line {lineno}: parse error: {e}")),
+            Err(e) => return fail(count, prev, format!("line {lineno}: parse error: {e}")),
         };
 
         if entry.seq != expected_seq {
             return fail(
                 count,
-                format!("line {lineno}: expected seq {expected_seq}, got {}", entry.seq),
+                prev,
+                format!(
+                    "line {lineno}: expected seq {expected_seq}, got {}",
+                    entry.seq
+                ),
             );
         }
         if entry.prev != prev {
-            return fail(count, format!("line {lineno}: prev-hash mismatch (chain broken)"));
+            return fail(
+                count,
+                prev,
+                format!("line {lineno}: prev-hash mismatch (chain broken)"),
+            );
         }
 
         let prev_bytes = hex::decode(&entry.prev).unwrap_or_else(|_| vec![0u8; 32]);
@@ -240,19 +323,24 @@ pub fn verify_str(jsonl: &str, pubkey: Option<&VerifyingKey>) -> VerifyReport {
         hasher.update(entry.record.get().as_bytes());
         let computed = hex::encode(hasher.finalize());
         if computed != entry.hash {
-            return fail(count, format!("line {lineno}: hash mismatch (record tampered)"));
+            return fail(
+                count,
+                prev,
+                format!("line {lineno}: hash mismatch (record tampered)"),
+            );
         }
 
-        if let Some(pk) = pubkey {
+        if let Some(pk) = opts.pubkey {
             match verify_sig(pk, &entry) {
                 Ok(true) => {}
                 Ok(false) => {
                     return fail(
                         count,
+                        prev,
                         format!("line {lineno}: signature mismatch (forged or wrong key)"),
                     )
                 }
-                Err(msg) => return fail(count, format!("line {lineno}: {msg}")),
+                Err(msg) => return fail(count, prev, format!("line {lineno}: {msg}")),
             }
         }
 
@@ -261,10 +349,50 @@ pub fn verify_str(jsonl: &str, pubkey: Option<&VerifyingKey>) -> VerifyReport {
         count += 1;
     }
 
+    // Whole-log property 1: missing evidence is a failure signal. A wiped or
+    // empty log MUST NOT verify as ok unless the caller explicitly allows it.
+    if count == 0 && !opts.allow_empty {
+        return fail(
+            0,
+            GENESIS.to_string(),
+            "empty log (no entries): missing evidence is a failure".to_string(),
+        );
+    }
+
+    // Whole-log property 2: head anchoring. The log must end at exactly the
+    // witnessed head; this is what catches tail truncation / rollback / wipe,
+    // none of which the chain alone can detect.
+    if let Some(exp) = &opts.expected_head {
+        if count != exp.seq {
+            return fail(
+                count,
+                prev,
+                format!(
+                    "head-anchor mismatch: expected {} entr{}, found {} (log truncated or extended)",
+                    exp.seq,
+                    if exp.seq == 1 { "y" } else { "ies" },
+                    count
+                ),
+            );
+        }
+        if prev != exp.hash {
+            let found = prev.clone();
+            return fail(
+                count,
+                prev,
+                format!(
+                    "head-anchor mismatch: expected head {}, found {found} (log tampered or rolled back)",
+                    exp.hash
+                ),
+            );
+        }
+    }
+
     VerifyReport {
         entries: count,
         ok: true,
         error: None,
+        head: prev,
     }
 }
 
@@ -363,11 +491,12 @@ fn default_schema_version() -> String {
     EVIDENCE_SCHEMA_VERSION.to_string()
 }
 
-fn fail(entries: u64, msg: String) -> VerifyReport {
+fn fail(entries: u64, head: String, msg: String) -> VerifyReport {
     VerifyReport {
         entries,
         ok: false,
         error: Some(msg),
+        head,
     }
 }
 
@@ -416,5 +545,96 @@ mod tests {
             .as_deref()
             .unwrap_or_default()
             .contains("hash mismatch"));
+    }
+
+    fn probe_record(ts: &str, decision: &str) -> Record {
+        Record {
+            schema_version: Record::schema_version(),
+            ts: ts.to_string(),
+            session_id: Some("s".into()),
+            agent: Some("a".into()),
+            r#type: "tool_call".into(),
+            direction: "request".into(),
+            tool: None,
+            result: None,
+            latency_ms: None,
+            decision: decision.to_string(),
+            reason: None,
+            context: None,
+        }
+    }
+
+    #[test]
+    fn head_anchor_detects_truncation_rollback_and_wipe() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("audit.jsonl");
+        let p = path.to_str().unwrap();
+        let key = generate_signing_key();
+        let pk = key.verifying_key();
+
+        let log = AuditLog::open_signed(p, Some(key.clone())).unwrap();
+        log.append(probe_record("2026-01-01T00:00:00Z", "allow"))
+            .unwrap();
+        log.append(probe_record("2026-01-01T00:00:01Z", "allow"))
+            .unwrap();
+        // The action an attacker wants to erase: the last (blocked) entry.
+        log.append(probe_record("2026-01-01T00:00:02Z", "block"))
+            .unwrap();
+        // Witness records the head as the control plane would.
+        let anchor = log.head();
+        assert_eq!(anchor.seq, 3);
+        drop(log);
+
+        let anchored = |path: &str| {
+            verify_file_with(
+                path,
+                &VerifyOptions {
+                    pubkey: Some(&pk),
+                    expected_head: Some(anchor.clone()),
+                    allow_empty: false,
+                },
+            )
+            .unwrap()
+        };
+
+        // Intact log against its witnessed head: ok.
+        assert!(anchored(p).ok);
+
+        // Attacker drops the trailing entry.
+        let text = std::fs::read_to_string(p).unwrap();
+        let kept: Vec<&str> = text.lines().take(2).collect();
+        std::fs::write(p, kept.join("\n") + "\n").unwrap();
+
+        // Chain-only verification still passes — this is the gap that existed.
+        assert!(verify_file(p, Some(&pk)).unwrap().ok);
+        // Anchored verification CATCHES the truncation.
+        let r = anchored(p);
+        assert!(!r.ok);
+        assert!(r.error.as_deref().unwrap().contains("truncated"));
+
+        // Attacker wipes the log entirely.
+        std::fs::write(p, "").unwrap();
+        // Even without an anchor, an empty log is now invalid by default.
+        assert!(!verify_file(p, Some(&pk)).unwrap().ok);
+        // And anchored verification reports the head mismatch.
+        assert!(!anchored(p).ok);
+    }
+
+    #[test]
+    fn empty_log_invalid_unless_opted_in() {
+        let def = verify_str("", None);
+        assert!(!def.ok);
+        assert_eq!(def.entries, 0);
+        assert_eq!(def.head, GENESIS);
+
+        let allowed = verify_str_with(
+            "",
+            &VerifyOptions {
+                allow_empty: true,
+                ..Default::default()
+            },
+        );
+        assert!(allowed.ok);
+        assert_eq!(allowed.entries, 0);
     }
 }
