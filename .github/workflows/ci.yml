@@ -1,0 +1,41 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: format
+        run: cargo fmt --all --check
+      - name: clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: test
+        run: cargo test --all-targets
+      - name: conformance vectors
+        run: cargo test --test conformance
+
+  # The kernel claims a portable evidence surface (C/C++, Python, embedded, JS via
+  # wasm32). Guard both halves of that claim so a change can't quietly break it.
+  bindings:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: wasm32 build
+        run: cargo build --target wasm32-unknown-unknown
+      - name: C ABI via ctypes
+        run: |
+          cargo build
+          python3 bindings/ffi_ctypes.py
